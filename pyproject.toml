@@ -18,8 +18,12 @@ whisperlive = [
     "whisper-live @ git+https://github.com/collabora/WhisperLive.git@99cbc1c33b35c372b4790975f819dfde62f3e74a",
 ]
 
-[tool.uv]
-package = false
+[project.scripts]
+caption-relay = "caption_relay.cli:run"
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
 
 # The comparison routes run on CPU; do not install CUDA through torch.
 [tool.uv.sources]
