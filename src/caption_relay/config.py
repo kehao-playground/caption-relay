@@ -22,6 +22,8 @@ class Config:
     zh_scale: float
     en_scale: float
     show_zh: bool
+    line_numbers: bool
+    timestamps: bool
     source_language: str
     destination_language: str
     audio_device: str
@@ -56,6 +58,10 @@ def _build_parser():
                     help="Override Chinese caption scale")
     ap.add_argument("--en-scale", type=float, choices=CAPTION_SCALES,
                     help="Override destination caption scale")
+    ap.add_argument("--line-numbers", action=argparse.BooleanOptionalAction,
+                    help="Override display.line_numbers (caption number column)")
+    ap.add_argument("--timestamps", action=argparse.BooleanOptionalAction,
+                    help="Override display.timestamps (receive-time column)")
     ap.add_argument("--source-language", help="Override source language (auto or BCP-47 code)")
     ap.add_argument("--destination-language", help="Override destination language (BCP-47 code or name)")
     return ap
@@ -80,9 +86,13 @@ def parse_args(argv=None):
             override = getattr(args, name)
             scales[name] = float(value if override is None else override)
 
-        show_zh = display.get("show_zh", True)
-        if not isinstance(show_zh, bool):
-            raise ValueError("display.show_zh must be true or false")
+        flags = {}
+        for name, default in (("show_zh", True), ("line_numbers", False), ("timestamps", False)):
+            value = display.get(name, default)
+            if not isinstance(value, bool):
+                raise ValueError(f"display.{name} must be true or false")
+            override = getattr(args, name, None)
+            flags[name] = value if override is None else override
 
         source = _text(args.source_language or languages.get("source", DEFAULT_SOURCE_LANGUAGE),
                        "languages.source must be auto or a BCP-47 code")
@@ -92,6 +102,6 @@ def parse_args(argv=None):
                        "audio.input_device must be a device name fragment")
     except (OSError, ValueError, tomllib.TOMLDecodeError) as e:
         ap.error(f"Configuration {args.config}: {e}")
-    return Config(config=args.config, file=args.file, show_zh=show_zh,
+    return Config(config=args.config, file=args.file,
                   source_language=source, destination_language=destination,
-                  audio_device=device, **scales)
+                  audio_device=device, **scales, **flags)

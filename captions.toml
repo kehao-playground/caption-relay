@@ -4,6 +4,10 @@ zh_scale = 1.0
 en_scale = 1.0
 # false: show Chinese temporarily, then replace it with English.
 show_zh = false
+# Left metadata column: caption number and application receive time (HH:MM:SS).
+# Receive time is when the finalized text arrived, not a word-level timestamp.
+line_numbers = false
+timestamps = false
 
 # Language settings. Source accepts auto or a BCP-47 code such as zh-TW.
 [languages]

@@ -62,7 +62,8 @@ async def main(argv=None):
     client = genai.Client(api_key=load_key())
     source = open_source(config)
     print_logo()
-    display = CaptionDisplay(config.zh_scale, config.en_scale, config.show_zh)
+    display = CaptionDisplay(config.zh_scale, config.en_scale, config.show_zh,
+                             config.line_numbers, config.timestamps)
     coordinator = CaptionCoordinator(GeminiTranslator(client), display.handle, config.destination_language)
     transcriber = GeminiLiveTranscriber(client, config.language_codes, vocabulary())
     display.handle(SessionStatus(describe(config)))

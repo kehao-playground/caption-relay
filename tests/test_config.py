@@ -34,6 +34,7 @@ class ConfigTests(unittest.TestCase):
     def test_missing_sections_use_defaults(self):
         args = parse_args(["--config", self.config("")])
         self.assertEqual((args.zh_scale, args.en_scale, args.show_zh), (1.0, 1.0, True))
+        self.assertEqual((args.line_numbers, args.timestamps), (False, False))
         self.assertEqual((args.source_language, args.destination_language), ("auto", "en"))
         self.assertEqual(args.audio_device, "pipewire")
 
@@ -43,6 +44,13 @@ class ConfigTests(unittest.TestCase):
                            "--source-language", "zh-TW", "--destination-language", "fr"])
         self.assertEqual(args.zh_scale, 1.5)
         self.assertEqual((args.source_language, args.destination_language), ("zh-TW", "fr"))
+
+    def test_metadata_columns_from_file_and_cli(self):
+        path = self.config("[display]\nline_numbers = true\ntimestamps = false\n")
+        args = parse_args(["--config", path])
+        self.assertEqual((args.line_numbers, args.timestamps), (True, False))
+        args = parse_args(["--config", path, "--no-line-numbers", "--timestamps"])
+        self.assertEqual((args.line_numbers, args.timestamps), (False, True))
 
     def test_bcp47_source_becomes_single_language_hint(self):
         args = parse_args(["--config", self.config('[languages]\nsource = "zh-TW"\n')])
@@ -58,6 +66,8 @@ class ConfigTests(unittest.TestCase):
                 ("[display]\nzh_scale = 2.0\n", "display.zh_scale must be one of"),
                 ("[display]\nen_scale = true\n", "display.en_scale must be one of"),
                 ('[display]\nshow_zh = "no"\n', "display.show_zh must be true or false"),
+                ("[display]\nline_numbers = 1\n", "display.line_numbers must be true or false"),
+                ('[display]\ntimestamps = "yes"\n', "display.timestamps must be true or false"),
                 ('[languages]\nsource = " "\n', "languages.source must be auto"),
                 ("[languages]\ndestination = 1\n", "languages.destination must be"),
                 ('[audio]\ninput_device = ""\n', "audio.input_device must be"),

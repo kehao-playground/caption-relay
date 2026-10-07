@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import unittest
 from unittest.mock import patch
 
@@ -39,9 +40,9 @@ class EventDriver:
     def interim(self, text):
         self.display.handle(InterimText(text))
 
-    def final(self, text):
+    def final(self, text, received_at=0.0):
         caption_id = next(self.ids)
-        self.display.handle(FinalText(caption_id, text, 0.0))
+        self.display.handle(FinalText(caption_id, text, received_at))
         return caption_id
 
     def translated(self, caption_id, text):
@@ -270,6 +271,81 @@ class CaptionDisplayTests(unittest.TestCase):
     def test_unknown_event_is_rejected(self):
         with self.assertRaises(TypeError):
             CaptionDisplay(1.0, 1.0, False).handle("text")
+
+    def test_line_numbers_stay_with_their_caption_when_completed_out_of_order(self):
+        display = EventDriver(1.0, 1.0, False, True, False)
+        first = display.final("第一句中文")
+        second = display.final("第二句中文")
+        display.translated(second, "Second")
+        display.translated(first, "First")
+        lines = self.rendered()["lines"]
+        self.assertEqual(lines[:3], ["  2  Second", "─" * 39, "  1  First"])
+
+    def test_wrapped_caption_has_one_number_and_a_hanging_indent(self):
+        display = EventDriver(1.0, 1.0, False, True, False)
+        display.translated(display.final("中文"), "a" * 60)
+        display.translated(display.final("中文"), "Next")
+        lines = self.rendered()["lines"]
+        self.assertEqual(lines[:4], ["  1  " + "a" * 35, "     " + "a" * 25, "─" * 39, "  2  Next"])
+
+    def test_receive_time_column_uses_final_text_time(self):
+        received = 1_760_000_000.0
+        display = EventDriver(1.0, 1.0, False, True, True)
+        caption_id = display.final("中文", received)
+        self.assertIn(time.strftime("%H:%M:%S", time.localtime(received)), self.screen())
+        display.translated(caption_id, "Done")
+        stamp = time.strftime("%H:%M:%S", time.localtime(received))
+        self.assertEqual(self.rendered()["lines"][0], f"  1 {stamp}  Done")
+
+    def test_interim_preview_gets_blank_aligned_gutter(self):
+        display = EventDriver(1.0, 1.0, False, True, False)
+        display.interim("中文辨識進度")
+        self.assertEqual(self.rendered()["lines"][0], "     … 中文辨識進度")
+
+    def test_scaled_wrapped_caption_keeps_text_and_indents_continuation_rows(self):
+        display = EventDriver(1.0, 1.2, False, True, False)
+        text = "abcdefghij" * 5
+        display.translated(display.final("中文"), text)
+        lines = [line for line in self.rendered()["lines"] if line.strip()]
+        self.assertTrue(lines[0].startswith("  1  "))
+        self.assertTrue(all(line.startswith("     ") for line in lines[1:]))
+        self.assertEqual("".join(line[5:] for line in lines), text)
+        self.assertNotIn("中文", self.screen())
+
+    def test_scaled_preview_with_gutter_stays_on_one_caption_line(self):
+        for scale in (1.2, 1.5):
+            with self.subTest(scale=scale):
+                self.output.seek(0)
+                self.output.truncate()
+                display = EventDriver(scale, 1.2, False, True, True)
+                caption_id = display.final("ab中cd文" * 20)
+                lines = self.rendered()["lines"]
+                self.assertTrue(lines[0].startswith("  1 "))
+                # The block's second row holds only the gutter's blank cells.
+                self.assertEqual("".join(lines[1:]).strip(), "")
+                display.translated(caption_id, "Complete")
+                self.assertNotIn("中", self.screen())
+
+    def test_show_chinese_mode_numbers_the_source_line_once(self):
+        display = EventDriver(1.0, 1.0, True, True, False)
+        display.translated(display.final("中文定稿"), "Complete")
+        lines = self.rendered()["lines"]
+        self.assertEqual(lines[:2], ["  1  ZH  中文定稿", "     Complete"])
+
+    def test_failure_line_identifies_its_caption(self):
+        display = EventDriver(1.0, 1.0, False, True, False)
+        display.final("第一句中文")
+        display.failed(1, "quota")
+        lines = self.rendered()["lines"]
+        self.assertEqual(lines[0], "  1    [Translation failed: quota]")
+        self.assertEqual(lines[1], "  1  ZH  第一句中文")
+
+    def test_redirected_output_keeps_metadata_without_decoration(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            display = EventDriver(1.0, 1.0, False, True, False)
+            display.translated(display.final("中文"), "Complete")
+        self.assertEqual(output.getvalue(), "  1  Complete\n")
 
 
 class ImportBoundaryTests(unittest.TestCase):
