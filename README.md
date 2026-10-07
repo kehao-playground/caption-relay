@@ -13,6 +13,7 @@ Caption Relay is the public project name and the checkout directory is `caption-
 - Chinese preview that is replaced by the finalized translation when `show_zh = false`.
 - Normal-size terminal captions by default; optional Kitty text scaling remains supported.
 - English captions without an artificial `EN` prefix.
+- Optional caption-number and receive-time column that stays correct when translations finish out of order.
 - Low-contrast separators between completed captions; wrapped lines do not receive extra separators.
 - PortAudio input selection by device-name fragment, with PipeWire as the default.
 - English runtime logs and configuration errors for public-project usability.
@@ -59,6 +60,8 @@ Audio-device and WAV-format errors are reported before the Gemini session opens.
 zh_scale = 1.0
 en_scale = 1.0
 show_zh = false
+line_numbers = false
+timestamps = false
 
 [languages]
 source = "auto"
@@ -74,7 +77,7 @@ input_device = "pipewire"
 - `languages.destination`: a language code or name used in the translation request; default `en`.
 - One-run overrides: `--source-language`, `--destination-language`.
 
-Gemini Live does not provide speaker diarization or word-level timestamps in its live streaming route. Those features require a non-streaming transcription workflow. Caption Relay can add application-level line numbers or receive-time timestamps later without changing the transcription protocol.
+Gemini Live does not provide speaker diarization or word-level timestamps in its live streaming route. Those features require a non-streaming transcription workflow. Caption Relay's optional timestamps are application receive times (see Display).
 
 ### Display
 
@@ -82,6 +85,8 @@ Gemini Live does not provide speaker diarization or word-level timestamps in its
 - `show_zh = false`: show Chinese interim/final text temporarily, then replace that utterance with the translation. If translation fails, the source preview and an English error remain visible.
 - Kitty 0.40+ supports the text sizing protocol used by scaled captions. Scaled text occupies terminal grid rows; `1.0` avoids the extra row required by enlarged text.
 - In interactive terminals, completed captions are separated by a subtle gray rule. Redirected output omits terminal decoration.
+- `line_numbers = true` adds a left column with the caption number; `timestamps = true` adds the local time (`HH:MM:SS`) at which the finalized source text arrived. Numbers follow finalization order, so they stay with their caption when translations complete out of order. Wrapped rows are indented under the text rather than numbered again. Redirected output keeps the column as plain text. One-run overrides: `--line-numbers`/`--no-line-numbers`, `--timestamps`/`--no-timestamps`.
+- Scaled captions (`1.2`, `1.5`) wrap at character boundaries, not word boundaries.
 
 ### Audio
 
@@ -107,11 +112,18 @@ caption-relay/
 ├── src/caption_relay/      # Primary Gemini route (installable package)
 │   ├── cli.py              # Entry point: credentials, audio source, session lifetime
 │   ├── config.py           # captions.toml + CLI overrides -> validated Config
-│   ├── audio.py            # Microphone, WAV fixture, utterance-end detection
-│   ├── gemini.py           # Gemini Live session and per-utterance translation
-│   └── display.py          # Terminal/Kitty rendering only
+│   ├── audio.py            # Microphone, WAV fixture, audio events (chunk, pause, end)
+│   ├── events.py           # Caption events shared by providers, coordinator, renderers
+│   ├── coordinator.py      # Caption IDs, receive times, translation task lifetime
+│   ├── translation.py      # Translator protocol and TranslationRequest
+│   ├── providers/
+│   │   ├── gemini_live.py  # Gemini Live transcription -> events
+│   │   └── gemini_text.py  # Gemini per-utterance translation
+│   └── renderers/
+│       └── terminal.py     # Terminal/Kitty rendering only
 ├── tests/                  # Unit tests and Kitty parser-backed display tests
 ├── routes/                 # Optional comparison routes (separate from the package)
+│   ├── README.md           # Route index: commands, extras, privacy
 │   ├── offline/            # VAD + faster-whisper
 │   ├── sherpa/             # sherpa-onnx streaming recognition and probes
 │   └── whisperlive/        # WhisperLive server, clients, and launchers
@@ -126,30 +138,29 @@ caption-relay/
 ## Architecture
 
 ```text
-start.sh
-  -> caption-relay (caption_relay.cli)
-       -> config.parse_args(): captions.toml + CLI overrides
-       -> audio.Microphone | audio.WavFile, audio.SilenceDetector
-       -> gemini.run_session(): Gemini Live transcription
-            -> gemini.translate() per finalized utterance
-       -> display.CaptionDisplay (terminal state, replacement, separators)
-       -> Kitty/TTY output
+Microphone | WavFile
+  -> audio_events(): AudioChunk, UtteranceEnd, StreamEnd
+  -> GeminiLiveTranscriber            emits SessionStatus, InterimText, FinalTranscript
+  -> CaptionCoordinator               FinalTranscript -> FinalText(id, text, received_at)
+       -> Translator (GeminiTranslator) per FinalText, bounded concurrency
+       <- TranslationReady(id) | TranslationFailed(id)
+  -> CaptionDisplay.handle(event)     preview replacement, separators, metadata column
+  -> Kitty/TTY output
 ```
+
+`cli.py` wires these together after `config.parse_args()` and opens the audio source before connecting.
 
 Important boundaries:
 
 - `config.py` is the only CLI/configuration boundary; nothing else reads TOML.
-- `audio.py` owns PortAudio, ALSA diagnostics, and WAV validation. It does not know about Gemini.
-- `gemini.py` owns network sessions and translation task coordination.
-- `display.py` owns terminal rendering only. It must not call Gemini or read API keys.
+- `audio.py` owns PortAudio, ALSA diagnostics, WAV validation, and pause detection. It does not know about Gemini.
+- `providers/` owns network sessions and provider response models; nothing outside it imports the Google SDK except `cli.py`, which creates the client.
+- `coordinator.py` owns caption IDs and translation task lifetime. It depends only on the `Translator` protocol, so tests use a fake translator.
+- `renderers/terminal.py` consumes events only. It must not call providers or read API keys.
 - `captions.toml` owns user-selectable language, audio, and display defaults.
-- `tests/test_display.py` exercises terminal transitions through Kitty's parser, not source-string snapshots.
+- `tests/test_terminal_renderer.py` exercises terminal transitions through Kitty's parser with synthetic events, not source-string snapshots.
 
-Comparison routes (run them from the checkout; models go in `models/`, see `models/README.md`):
-
-- `routes/offline/captions_offline.py`: VAD plus faster-whisper.
-- `routes/sherpa/captions_live.py`: sherpa-onnx streaming recognition; `probe_*.py` are manual decoding probes.
-- `routes/whisperlive/`: `serve.sh` starts the server; `captions.sh` and `live_zh2en.py` are WhisperLive comparison clients.
+Comparison routes live in `routes/`; see [`routes/README.md`](routes/README.md) for commands, dependency extras, and what each route sends off the machine.
 
 ## Development setup
 
@@ -172,13 +183,13 @@ Do not commit API keys, recordings, model files, virtual environments, generated
 
 ## Verification status
 
-The primary Gemini route has been exercised with the bundled 38.7-second fixture and produced six finalized English captions. The microphone path has been opened successfully through the configured PipeWire device. Configuration parsing, WAV validation, and utterance-end detection have unit tests. The terminal renderer has 17 Kitty-backed regression tests covering replacement ordering, separators, wrapping, narrow splits, mixed-width text, redirected output, and failure retention.
+The primary Gemini route has been exercised with the bundled 38.7-second fixture and produced six finalized English captions. The microphone path has been opened successfully through the configured PipeWire device. The test suite has 57 tests. Configuration parsing, WAV validation, microphone selection (with a fake PyAudio), audio events, the caption coordinator (with a fake translator: ID stability, out-of-order completion, failures, bounded concurrency, cancellation), and the Gemini translator request shape have unit tests. The terminal renderer has 28 Kitty-backed regression tests covering replacement ordering, separators, wrapping, narrow splits, mixed-width text, redirected output, failure retention, and the metadata column. The metadata column has also been inspected in a real Kitty window with the live fixture.
 
 The following are not promises: microphone quality in every environment, exact semantic translation quality, speaker identity, word-level timing, or offline privacy for the Gemini route.
 
 ## Refactoring roadmap
 
-See [`docs/REFACTORING.md`](docs/REFACTORING.md) for staged changes. The safe next boundary is separating backend events from terminal rendering; do not mix that migration with a model or display redesign.
+See [`docs/REFACTORING.md`](docs/REFACTORING.md) for staged changes. Stages 1–5 are implemented; the roadmap records what remains and what is deliberately out of scope.
 
 ## AI-assisted maintenance
 

@@ -5,8 +5,8 @@ This is an implementation plan, not a claim that the stages are complete. Keep e
 ## Current baseline
 
 - The primary route is the `caption_relay` package in `src/caption_relay/`, launched through the `caption-relay` console script.
-- `config.py` parses CLI and TOML into a frozen `Config`; `audio.py` owns microphone and WAV input; `gemini.py` combines Gemini Live transport and translation scheduling; `cli.py` owns process lifecycle.
-- `display.py` is a separate terminal renderer with Kitty-backed tests.
+- `config.py` parses CLI and TOML into a frozen `Config`; `audio.py` emits audio events; `providers/gemini_live.py` emits transcription events; `coordinator.py` owns caption IDs and translation tasks; `renderers/terminal.py` consumes events; `cli.py` wires them together.
+- Stages 1–5 are complete. Stage 6 is complete except for porting the legacy comparison routes, which remains a non-goal.
 - `captions.toml` contains display, language, and audio defaults.
 - The primary fixture completes six finalized English captions.
 - Translation tasks may complete out of order; caption IDs protect replacement state.
@@ -22,7 +22,7 @@ This is an implementation plan, not a claim that the stages are complete. Keep e
 
 **Exit criteria:** configuration tests cover every public key; no caller reads TOML directly.
 
-**Status:** mostly done. `Config` is a single frozen dataclass (not one object per section) and `tests/test_config.py` covers defaults, missing sections, invalid values, CLI precedence, and `source = "auto"`. Remaining: a device-selection error test that mocks PyAudio.
+**Status:** done. `Config` is a single frozen dataclass (not one object per section). `tests/test_config.py` covers defaults, missing sections, every display key, invalid values, CLI precedence, and `source = "auto"`; `tests/test_audio.py` covers device selection errors with a fake PyAudio.
 
 ## Stage 2: Define backend events
 
@@ -45,6 +45,8 @@ SessionStatus(message)
 
 **Exit criteria:** display tests can run with synthetic events and no Google SDK import.
 
+**Status:** done. Providers emit `SessionStatus`, `InterimText`, and `FinalTranscript`; `CaptionCoordinator` converts finals into `FinalText` with sequential IDs and emits `TranslationReady`/`TranslationFailed`. Renderer tests feed synthetic events, and a test asserts the renderer and coordinator import no Google module. Startup status lines changed to `[Captions] …`, `[Connecting] …`, `[Connected] Ctrl-C to stop`; an empty translation is now reported as a failure.
+
 ## Stage 3: Audio input abstraction
 
 **Goal:** make microphone and fixture input interchangeable.
@@ -56,7 +58,7 @@ SessionStatus(message)
 
 **Exit criteria:** the session coordinator no longer branches deeply on `args.file`.
 
-**Status:** mostly done. `audio.Microphone` and `audio.WavFile` share a `chunks()`/`close()` shape, are opened before the session, and `gemini.run_session()` does not branch on the source type. `tests/test_audio.py` covers invalid WAV formats and silence detection. Remaining: a missing-device test without PortAudio hardware, and an explicit end event instead of generator exhaustion.
+**Status:** done. `Microphone` and `WavFile` implement the `AudioSource` protocol and are opened before the session. `audio_events()` yields `AudioChunk`, `UtteranceEnd`, and an explicit `StreamEnd`, so the provider no longer runs silence detection. `tests/test_audio.py` covers invalid WAV formats, missing devices, unsuppressed stream-open failures, and event ordering without hardware or network.
 
 ## Stage 4: Translation provider abstraction
 
@@ -69,6 +71,8 @@ SessionStatus(message)
 
 **Exit criteria:** coordinator tests use a deterministic fake translator; no network is needed to test replacement ordering.
 
+**Status:** done. `Translator` protocol with `TranslationRequest(text, destination_language)`; `GeminiTranslator` keeps AFC disabled. `tests/test_coordinator.py` uses a gated fake translator for ordering, failures, bounded concurrency, and cancellation; `tests/test_gemini_text.py` checks the request shape with a fake client.
+
 ## Stage 5: Renderer capabilities
 
 **Goal:** support optional metadata without coupling it to layout code.
@@ -79,6 +83,8 @@ SessionStatus(message)
 - Do not claim word-level timestamps when only receive time is available.
 
 **Exit criteria:** line numbers remain stable under out-of-order translation; wrapped lines do not receive duplicate numbers or separators.
+
+**Status:** done. `display.line_numbers` and `display.timestamps` (default off, with CLI overrides) render a left column whose number width is `max(3, digits)`. Wrapped rows, including Kitty-scaled rows, get a hanging indent; previews get a blank aligned gutter; failure lines show their caption number. Default output is byte-for-byte unchanged when both settings are off. Verified with Kitty parser tests and a real Kitty window.
 
 ## Stage 6: Backend registry and package layout
 
@@ -102,7 +108,7 @@ caption_relay/
     sherpa.py
 ```
 
-**Status:** the package layout, `caption-relay` entry point, and `routes/` separation are done; old root script paths were removed in one cutover. The `events`, `providers/`, `renderers/`, and `backends/` split remains future work and still depends on Stages 2, 4, and 5.
+**Status:** done except `backends/`. The package uses `events.py`, `coordinator.py`, `translation.py`, `providers/`, and `renderers/`; old script paths were removed in one cutover. Comparison routes are discoverable through `routes/README.md`, which lists commands, extras, and what each route sends off the machine. Porting them into `backends/` would mean rewriting them, which the non-goals below exclude; do it only on explicit request, one route at a time, behind the existing event and translator contracts.
 
 - Move only after Stages 1–5 have stable tests.
 - Keep `start.sh` as a compatibility launcher.
