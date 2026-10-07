@@ -7,7 +7,8 @@ This file is for coding agents and maintainers. Follow it before changing runtim
 - Public name: **Caption Relay**.
 - Python project name: `caption-relay`.
 - Checkout directory: `caption-relay`.
-- Primary user path: `start.sh` -> `captions_gemini.py`.
+- Python package: `caption_relay` in `src/caption_relay/`; console script `caption-relay`.
+- Primary user path: `start.sh` -> `caption-relay` -> `caption_relay.cli:run`.
 
 ## Setup
 
@@ -15,8 +16,8 @@ This file is for coding agents and maintainers. Follow it before changing runtim
 uv sync --locked
 export GEMINI_API_KEY="..."  # needed for live Gemini runs
 ./start.sh --help
-uv run python -m unittest -v test_caption_display.py
-python -m py_compile captions_gemini.py caption_display.py test_caption_display.py
+uv run python -m unittest discover -s tests -v
+uv run python -m compileall -q src tests routes scripts
 ```
 
 Optional dependency groups:
@@ -30,35 +31,43 @@ uv sync --locked --extra whisperlive
 For a network/API smoke run:
 
 ```bash
-./start.sh --file test_zh_paused16k.wav
+./start.sh --file fixtures/test_zh_paused16k.wav
 ```
 
 Do not run a live microphone test unless the user requested it. It opens the selected PortAudio device and sends audio to Gemini.
 
 ## Runtime contract
 
-1. `parse_args()` loads `captions.toml` and applies one-run CLI overrides.
-2. `source = "auto"` becomes an empty Gemini language hint; a BCP-47 value becomes a single hint.
-3. `capture()` sends 16 kHz mono PCM in 100 ms chunks and emits an audio-stream end after silence.
-4. Gemini emits interim and finalized input transcription events.
-5. Each finalized utterance receives an opaque caption ID and an asynchronous translation task.
-6. `CaptionDisplay` keeps the newest source preview visible until that exact translation completes.
-7. Translation completion replaces only its own source preview; out-of-order completions must not overwrite newer text.
-8. Terminal decorations are disabled for redirected output.
+1. `config.parse_args()` loads `captions.toml`, applies one-run CLI overrides, and returns a frozen `Config`.
+2. `source = "auto"` becomes an empty Gemini language hint (`Config.language_codes`); a BCP-47 value becomes a single hint.
+3. The audio source (`Microphone` or `WavFile`) is opened before the Gemini session so device and format errors fail fast.
+4. The capture thread sends 16 kHz mono PCM in 100 ms chunks; `SilenceDetector` triggers an audio-stream end after silence. Capture failures propagate to the session instead of hanging it.
+5. Gemini emits interim and finalized input transcription events.
+6. Each finalized utterance receives an opaque caption ID and an asynchronous translation task.
+7. `CaptionDisplay` keeps the newest source preview visible until that exact translation completes.
+8. Translation completion replaces only its own source preview; out-of-order completions must not overwrite newer text.
+9. Terminal decorations are disabled for redirected output.
 
 ## File ownership
 
 | File | Responsibility | Do not add |
 |---|---|---|
-| `captions_gemini.py` | CLI, config, Gemini sessions, capture, task lifecycle | Terminal cursor algorithms or duplicated rendering logic |
-| `caption_display.py` | TTY/Kitty rendering, preview replacement, separators | API calls, environment-specific model logic |
+| `src/caption_relay/cli.py` | Entry point, credentials, audio-source selection, session lifetime | Protocol details or rendering |
+| `src/caption_relay/config.py` | CLI parsing, TOML loading and validation, `Config` | I/O beyond reading the config file |
+| `src/caption_relay/audio.py` | PortAudio microphone, ALSA quieting, WAV fixtures, silence detection | Network calls |
+| `src/caption_relay/gemini.py` | Gemini Live session, translation tasks, capture thread coordination | Terminal cursor algorithms or duplicated rendering logic |
+| `src/caption_relay/display.py` | TTY/Kitty rendering, preview replacement, separators | API calls, environment-specific model logic |
+| `tests/test_display.py` | Kitty parser-backed display regressions | Tautological source-text tests |
+| `tests/test_config.py`, `tests/test_audio.py` | Configuration and audio-input regressions | Network or live-device access |
 | `captions.toml` | Safe project defaults | Secrets, host-specific absolute paths |
-| `test_caption_display.py` | Kitty parser-backed display regressions | Tautological source-text tests |
 | `start.sh` | Stable launcher | Business logic |
+| `routes/` | Optional comparison routes, each self-contained | Imports from or into `caption_relay` |
+| `scripts/` | Developer utilities such as fixture generation | Runtime code |
+| `fixtures/`, `models/` | Local test audio and model files (ignored except text and README) | Committed binaries |
 | `README.md` | Public usage and limitations | Unverified performance claims |
-| `REFACTORING.md` | Staged design plan | Completed implementation details presented as future work |
+| `docs/REFACTORING.md` | Staged design plan | Completed implementation details presented as future work |
 
-The offline and comparison scripts are intentionally separate routes. Reuse their existing behavior before changing them; do not silently make a Gemini privacy claim for a local route or vice versa.
+The offline and comparison scripts under `routes/` are intentionally separate routes. Reuse their existing behavior before changing them; do not silently make a Gemini privacy claim for a local route or vice versa.
 
 ## Configuration rules
 
@@ -78,17 +87,18 @@ The offline and comparison scripts are intentionally separate routes. Reuse thei
 - Keep the terminal renderer backend-agnostic. Kitty-specific escape sequences belong behind renderer helpers.
 - Do not add a second configuration format.
 - Do not commit generated audio, model files, screenshots, smoke scripts, logs, or secrets.
+- Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`; optional scope such as `feat(display):`).
 
 ## Verification matrix
 
 Run the smallest relevant checks, then the full display suite for renderer changes:
 
 ```bash
-python -m py_compile captions_gemini.py caption_display.py test_caption_display.py
-uv run python -m unittest -v test_caption_display.py
+uv run python -m compileall -q src tests routes scripts
+uv run python -m unittest discover -s tests -v
 ./start.sh --help
 uv run python - <<'PY'
-from captions_gemini import parse_args
+from caption_relay.config import parse_args
 args = parse_args([])
 assert args.source_language == "auto"
 assert args.destination_language == "en"
@@ -113,6 +123,6 @@ Before delivery:
 - All affected callers, tests, docs, and config examples agree.
 - No stale old project name remains in public metadata or the main README unless describing migration history.
 - Runtime messages are English.
-- `python -m py_compile ...` passes.
+- `uv run python -m compileall -q src tests routes scripts` passes.
 - Relevant tests pass.
 - A changed interactive surface has been exercised in Kitty or the limitation is explicitly reported.

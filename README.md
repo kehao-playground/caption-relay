@@ -41,10 +41,14 @@ export GEMINI_API_KEY="your-api-key"
 Run the deterministic fixture instead of a microphone:
 
 ```bash
-./start.sh --file test_zh_paused16k.wav
+./start.sh --file fixtures/test_zh_paused16k.wav
 ```
 
-The fixture must be 16 kHz, mono, 16-bit PCM WAV. `start.sh` resolves the Python project from its own location, so it can be launched from another working directory.
+The fixture must be 16 kHz, mono, 16-bit PCM WAV. Audio files are not committed; `scripts/make_paused.py` regenerates the paused fixture from `fixtures/test_zh.txt` with Piper TTS (`uv sync --extra fixtures`, model in `models/`), and the 16 kHz copy can be produced with `ffmpeg -i fixtures/test_zh_paused.wav -ar 16000 -ac 1 fixtures/test_zh_paused16k.wav`.
+
+`start.sh` resolves the Python project from its own location, so it can be launched from another working directory. It runs the `caption-relay` console script, which is equivalent to `uv run caption-relay` or `uv run python -m caption_relay` inside the checkout.
+
+Audio-device and WAV-format errors are reported before the Gemini session opens.
 
 ## Configuration
 
@@ -96,36 +100,63 @@ The launcher suppresses harmless ALSA diagnostics emitted while PortAudio probes
 
 Runtime status, configuration errors, audio errors, and translation errors are emitted in English. Audio and finalized text are sent to Gemini in the Gemini route; do not describe this route as offline.
 
+## Project layout
+
+```text
+caption-relay/
+├── src/caption_relay/      # Primary Gemini route (installable package)
+│   ├── cli.py              # Entry point: credentials, audio source, session lifetime
+│   ├── config.py           # captions.toml + CLI overrides -> validated Config
+│   ├── audio.py            # Microphone, WAV fixture, utterance-end detection
+│   ├── gemini.py           # Gemini Live session and per-utterance translation
+│   └── display.py          # Terminal/Kitty rendering only
+├── tests/                  # Unit tests and Kitty parser-backed display tests
+├── routes/                 # Optional comparison routes (separate from the package)
+│   ├── offline/            # VAD + faster-whisper
+│   ├── sherpa/             # sherpa-onnx streaming recognition and probes
+│   └── whisperlive/        # WhisperLive server, clients, and launchers
+├── scripts/                # Fixture generation
+├── fixtures/               # Transcript (audio files are local-only)
+├── models/                 # Local model files (not committed)
+├── docs/                   # Design documents
+├── captions.toml           # User-facing configuration
+└── start.sh                # Stable launcher
+```
+
 ## Architecture
 
 ```text
 start.sh
-  -> captions_gemini.py
-       -> Gemini Live transcription session
-       -> CaptionDisplay (terminal state, replacement, separators)
-       -> Gemini text translation per finalized utterance
+  -> caption-relay (caption_relay.cli)
+       -> config.parse_args(): captions.toml + CLI overrides
+       -> audio.Microphone | audio.WavFile, audio.SilenceDetector
+       -> gemini.run_session(): Gemini Live transcription
+            -> gemini.translate() per finalized utterance
+       -> display.CaptionDisplay (terminal state, replacement, separators)
        -> Kitty/TTY output
 ```
 
 Important boundaries:
 
-- `captions_gemini.py` owns configuration, audio capture, network sessions, and task coordination.
-- `caption_display.py` owns terminal rendering only. It must not call Gemini or read API keys.
+- `config.py` is the only CLI/configuration boundary; nothing else reads TOML.
+- `audio.py` owns PortAudio, ALSA diagnostics, and WAV validation. It does not know about Gemini.
+- `gemini.py` owns network sessions and translation task coordination.
+- `display.py` owns terminal rendering only. It must not call Gemini or read API keys.
 - `captions.toml` owns user-selectable language, audio, and display defaults.
-- `test_caption_display.py` exercises terminal transitions through Kitty's parser, not source-string snapshots.
+- `tests/test_display.py` exercises terminal transitions through Kitty's parser, not source-string snapshots.
 
-Comparison routes:
+Comparison routes (run them from the checkout; models go in `models/`, see `models/README.md`):
 
-- `captions_offline.py`: VAD plus faster-whisper.
-- `captions_live.py`: sherpa-onnx streaming recognition.
-- `live_zh2en.py`, `captions.sh`, and `serve.sh`: WhisperLive comparison paths.
+- `routes/offline/captions_offline.py`: VAD plus faster-whisper.
+- `routes/sherpa/captions_live.py`: sherpa-onnx streaming recognition; `probe_*.py` are manual decoding probes.
+- `routes/whisperlive/`: `serve.sh` starts the server; `captions.sh` and `live_zh2en.py` are WhisperLive comparison clients.
 
 ## Development setup
 
 ```bash
 uv sync --locked
-uv run python -m unittest -v test_caption_display.py
-python -m py_compile captions_gemini.py caption_display.py test_caption_display.py
+uv run python -m unittest discover -s tests -v
+uv run python -m compileall -q src tests routes scripts
 ./start.sh --help
 ```
 
@@ -141,13 +172,13 @@ Do not commit API keys, recordings, model files, virtual environments, generated
 
 ## Verification status
 
-The primary Gemini route has been exercised with the bundled 38.7-second fixture and produced six finalized English captions. The microphone path has been opened successfully through the configured PipeWire device. The terminal renderer has 17 Kitty-backed regression tests covering replacement ordering, separators, wrapping, narrow splits, mixed-width text, redirected output, and failure retention.
+The primary Gemini route has been exercised with the bundled 38.7-second fixture and produced six finalized English captions. The microphone path has been opened successfully through the configured PipeWire device. Configuration parsing, WAV validation, and utterance-end detection have unit tests. The terminal renderer has 17 Kitty-backed regression tests covering replacement ordering, separators, wrapping, narrow splits, mixed-width text, redirected output, and failure retention.
 
 The following are not promises: microphone quality in every environment, exact semantic translation quality, speaker identity, word-level timing, or offline privacy for the Gemini route.
 
 ## Refactoring roadmap
 
-See [`REFACTORING.md`](REFACTORING.md) for staged changes. The safe next boundary is separating backend events from terminal rendering; do not mix that migration with a model or display redesign.
+See [`docs/REFACTORING.md`](docs/REFACTORING.md) for staged changes. The safe next boundary is separating backend events from terminal rendering; do not mix that migration with a model or display redesign.
 
 ## AI-assisted maintenance
 

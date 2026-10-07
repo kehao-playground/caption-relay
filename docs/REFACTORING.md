@@ -4,8 +4,9 @@ This is an implementation plan, not a claim that the stages are complete. Keep e
 
 ## Current baseline
 
-- `captions_gemini.py` combines configuration, capture, Gemini Live transport, translation scheduling, and process lifecycle.
-- `caption_display.py` is already a separate terminal renderer with Kitty-backed tests.
+- The primary route is the `caption_relay` package in `src/caption_relay/`, launched through the `caption-relay` console script.
+- `config.py` parses CLI and TOML into a frozen `Config`; `audio.py` owns microphone and WAV input; `gemini.py` combines Gemini Live transport and translation scheduling; `cli.py` owns process lifecycle.
+- `display.py` is a separate terminal renderer with Kitty-backed tests.
 - `captions.toml` contains display, language, and audio defaults.
 - The primary fixture completes six finalized English captions.
 - Translation tasks may complete out of order; caption IDs protect replacement state.
@@ -20,6 +21,8 @@ This is an implementation plan, not a claim that the stages are complete. Keep e
 - Preserve English runtime messages and the current `captions.toml` schema.
 
 **Exit criteria:** configuration tests cover every public key; no caller reads TOML directly.
+
+**Status:** mostly done. `Config` is a single frozen dataclass (not one object per section) and `tests/test_config.py` covers defaults, missing sections, invalid values, CLI precedence, and `source = "auto"`. Remaining: a device-selection error test that mocks PyAudio.
 
 ## Stage 2: Define backend events
 
@@ -51,7 +54,9 @@ SessionStatus(message)
 - Keep device discovery and ALSA handling inside the microphone implementation.
 - Test invalid WAV format and missing device behavior without opening a live API session.
 
-**Exit criteria:** `captions_gemini.py` no longer branches deeply on `args.file` inside the session coordinator.
+**Exit criteria:** the session coordinator no longer branches deeply on `args.file`.
+
+**Status:** mostly done. `audio.Microphone` and `audio.WavFile` share a `chunks()`/`close()` shape, are opened before the session, and `gemini.run_session()` does not branch on the source type. `tests/test_audio.py` covers invalid WAV formats and silence detection. Remaining: a missing-device test without PortAudio hardware, and an explicit end event instead of generator exhaustion.
 
 ## Stage 4: Translation provider abstraction
 
@@ -96,6 +101,8 @@ caption_relay/
     offline_whisper.py
     sherpa.py
 ```
+
+**Status:** the package layout, `caption-relay` entry point, and `routes/` separation are done; old root script paths were removed in one cutover. The `events`, `providers/`, `renderers/`, and `backends/` split remains future work and still depends on Stages 2, 4, and 5.
 
 - Move only after Stages 1–5 have stable tests.
 - Keep `start.sh` as a compatibility launcher.
