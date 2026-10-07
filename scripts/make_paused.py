@@ -2,7 +2,7 @@ from pathlib import Path
 import sys
 import subprocess, wave
 
-BASE = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 
 sents = [
     "大家好，今天很高興跟各位分享我們團隊最新的研究成果。",
@@ -17,11 +17,11 @@ parts = []
 for i, s in enumerate(sents):
     f = f"/tmp/sent_{i}.wav"
     subprocess.run([str(Path(sys.executable).with_name("piper")), "-m",
-                    str(BASE / "zh_CN-huayan-medium.onnx"), "-f", f],
+                    str(ROOT / "models" / "zh_CN-huayan-medium.onnx"), "-f", f],
                    input=s.encode(), check=True)
     parts.append(f)
 
-out = wave.open(str(BASE / "test_zh_paused.wav"), "wb")
+out = wave.open(str(ROOT / "fixtures" / "test_zh_paused.wav"), "wb")
 first = wave.open(parts[0])
 out.setnchannels(first.getnchannels()); out.setsampwidth(first.getsampwidth())
 out.setframerate(first.getframerate())

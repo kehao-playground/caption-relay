@@ -4,6 +4,7 @@
 set -euo pipefail
 MODEL="${1:-medium}"
 if (( $# )); then shift; fi
-BASE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-exec uv run --project "$BASE" --extra whisperlive python \
-  "$BASE/whisperlive_translate.py" --model "$MODEL" "$@"
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd -- "$HERE/../.." && pwd)"
+exec uv run --project "$ROOT" --extra whisperlive python \
+  "$HERE/translate.py" --model "$MODEL" "$@"

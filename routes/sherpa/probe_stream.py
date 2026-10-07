@@ -3,7 +3,8 @@ import sys, time, wave
 import numpy as np
 import sherpa_onnx
 
-D = Path(__file__).resolve().parent / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
+ROOT = Path(__file__).resolve().parents[2]
+D = ROOT / "models" / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
 rec = sherpa_onnx.OnlineRecognizer.from_transducer(
     tokens=f"{D}/tokens.txt",
     encoder=f"{D}/encoder-epoch-99-avg-1.int8.onnx",
@@ -16,7 +17,7 @@ rec = sherpa_onnx.OnlineRecognizer.from_transducer(
 )
 stream = rec.create_stream()
 
-wf = wave.open(sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).with_name("test_zh.wav")), "rb")
+wf = wave.open(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "fixtures" / "test_zh.wav"), "rb")
 rate = wf.getframerate()
 last, max_dt = 0.0, 0.0
 t0 = time.time()

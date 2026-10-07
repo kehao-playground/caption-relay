@@ -15,11 +15,11 @@ import urllib.request
 import numpy as np
 import sherpa_onnx
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "models"))
 MODELS = {
-    "zipformer": (f"{BASE}/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
+    "zipformer": (f"{MODEL_DIR}/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
                   "encoder-epoch-99-avg-1", "decoder-epoch-99-avg-1", "joiner-epoch-99-avg-1"),
-    "para": (f"{BASE}/sherpa-onnx-streaming-paraformer-bilingual-zh-en",
+    "para": (f"{MODEL_DIR}/sherpa-onnx-streaming-paraformer-bilingual-zh-en",
              "encoder", "decoder", None),
 }
 

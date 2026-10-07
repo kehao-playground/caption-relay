@@ -11,6 +11,5 @@ __pycache__/
 *.key
 *.wav
 output*.srt
-sherpa-onnx-streaming-*/
-zh_CN-*.onnx
-zh_CN-*.onnx.json
+/models/*
+!/models/README.md

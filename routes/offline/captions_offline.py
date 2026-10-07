@@ -16,7 +16,6 @@ import numpy as np
 import webrtcvad
 from faster_whisper import WhisperModel
 
-BASE = os.path.dirname(os.path.abspath(__file__))
 FRAME_MS = 30
 SR = 16000
 
