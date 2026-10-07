@@ -1,0 +1,32 @@
+[project]
+name = "caption-relay"
+version = "0.1.0"
+description = "Terminal-first live speech captioning and translation with Gemini and optional local backends"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "google-genai==2.28.0",
+    "numpy==2.4.6",
+    "pyaudio==0.2.14",
+]
+
+[project.optional-dependencies]
+offline = ["faster-whisper==1.2.0", "webrtcvad==2.0.10", "setuptools==80.10.2"]
+sherpa = ["sherpa-onnx==1.13.8", "sherpa-onnx-core==1.13.8"]
+fixtures = ["piper-tts==1.8.0"]
+whisperlive = [
+    "whisper-live @ git+https://github.com/collabora/WhisperLive.git@99cbc1c33b35c372b4790975f819dfde62f3e74a",
+]
+
+[tool.uv]
+package = false
+
+# The comparison routes run on CPU; do not install CUDA through torch.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
