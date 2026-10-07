@@ -4,6 +4,9 @@ import contextlib
 import ctypes
 import time
 import wave
+from collections.abc import Iterator
+from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 
@@ -11,6 +14,31 @@ SAMPLE_RATE = 16000
 CHUNK_FRAMES = 1600  # 100 ms
 CHUNK_BYTES = CHUNK_FRAMES * 2
 MIME_TYPE = f"audio/pcm;rate={SAMPLE_RATE}"
+
+
+@dataclass(frozen=True)
+class AudioChunk:
+    """100 ms of 16 kHz mono 16-bit PCM."""
+    pcm: bytes
+
+
+@dataclass(frozen=True)
+class UtteranceEnd:
+    """Speech was followed by sustained silence."""
+
+
+@dataclass(frozen=True)
+class StreamEnd:
+    """The source has no more audio."""
+
+
+AudioEvent = AudioChunk | UtteranceEnd | StreamEnd
+
+
+class AudioSource(Protocol):
+    def chunks(self) -> Iterator[bytes]: ...
+
+    def close(self) -> None: ...
 
 
 @contextlib.contextmanager
@@ -110,3 +138,13 @@ class SilenceDetector:
             self._silence, self._had_speech = 0, False
             return True
         return False
+
+
+def audio_events(source, detector=None):
+    """Yield the source's chunks, an UtteranceEnd after each detected pause, then StreamEnd."""
+    detector = detector or SilenceDetector()
+    for raw in source.chunks():
+        yield AudioChunk(raw)
+        if detector.update(raw):
+            yield UtteranceEnd()
+    yield StreamEnd()

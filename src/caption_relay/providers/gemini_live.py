@@ -6,7 +6,7 @@ import threading
 
 from google.genai import types
 
-from ..audio import MIME_TYPE, SilenceDetector
+from ..audio import MIME_TYPE, AudioChunk, UtteranceEnd, audio_events
 
 DEFAULT_LIVE_MODEL = "gemini-3.5-transcribe-live"
 DEFAULT_TRANSLATION_MODEL = "gemini-flash-lite-latest"
@@ -63,10 +63,10 @@ def _start_capture(source, session, loop):
 
     def capture():
         try:
-            detector = SilenceDetector()
-            for raw in source.chunks():
-                send(audio=types.Blob(data=raw, mime_type=MIME_TYPE))
-                if detector.update(raw):
+            for event in audio_events(source):
+                if isinstance(event, AudioChunk):
+                    send(audio=types.Blob(data=event.pcm, mime_type=MIME_TYPE))
+                elif isinstance(event, UtteranceEnd):
                     send(audio_stream_end=True).result(timeout=SEND_TIMEOUT)
             result = None, None
         except BaseException as e:
