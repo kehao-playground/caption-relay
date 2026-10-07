@@ -332,6 +332,23 @@ class CaptionDisplayTests(unittest.TestCase):
         lines = self.rendered()["lines"]
         self.assertEqual(lines[:2], ["  1  ZH  中文定稿", "     Complete"])
 
+    def test_show_chinese_mode_keeps_each_source_and_translation_together(self):
+        display = EventDriver(1.0, 1.0, True)
+        for source, translation in (("第一句", "First"), ("第二句", "Second")):
+            display.translated(display.final(source), translation)
+        lines = self.rendered()["lines"]
+        self.assertEqual(lines[:5], ["ZH  第一句", "First", "─" * 39, "ZH  第二句", "Second"])
+
+    def test_late_translation_in_show_chinese_mode_shows_its_own_number(self):
+        display = EventDriver(1.0, 1.0, True, True, False)
+        first = display.final("第一句")
+        second = display.final("第二句")
+        display.translated(first, "First")
+        display.translated(second, "Second")
+        lines = self.rendered()["lines"]
+        self.assertEqual(lines[:4], ["  1  ZH  第一句", "─" * 39, "  2  ZH  第二句", "  1  First"])
+        self.assertEqual(lines[4], "  2  Second")
+
     def test_failure_line_identifies_its_caption(self):
         display = EventDriver(1.0, 1.0, False, True, False)
         display.final("第一句中文")

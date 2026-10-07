@@ -136,7 +136,8 @@ class CaptionDisplay:
         self.timestamps = timestamps
         self.terminal = sys.stdout.isatty()
         self.preview = None
-        self.has_translation = False
+        self._has_history = False
+        self._last_caption = None  # caption ID of the newest history line
         self._received = {}  # caption ID -> receive time, until the caption completes
         self._last_id = 0
 
@@ -214,6 +215,14 @@ class CaptionDisplay:
             scale = 1.0 if self.show_zh else self.zh_scale
             self._set_preview(None, f"… {text[-60:]}", "\033[2m", scale)
 
+    def _separator(self):
+        """Divide completed captions; wrapped rows of one caption are never divided."""
+        if self.terminal and self._has_history:
+            # 預留最後一格避免自動換行。
+            columns = shutil.get_terminal_size((80, 24)).columns
+            print("\r\033[2K\033[2;90m" + "─" * max(0, columns - 1) + "\033[0m", flush=True)
+        self._has_history = True
+
     def _final(self, caption_id, text, received_at):
         self._last_id = max(self._last_id, caption_id)
         if self.timestamps:
@@ -221,7 +230,10 @@ class CaptionDisplay:
         if self.show_zh:
             self._clear_preview()
             self.preview = None
+            # 雙語模式以中文行開始一句，分隔線放在中文行之前。
+            self._separator()
             print_caption(f"ZH  {text}", "\033[36m", self.zh_scale, gutter=self._gutter(caption_id))
+            self._last_caption = caption_id
         elif self.terminal:
             self._set_preview(caption_id, f"ZH  {text}", "\033[36m", self.zh_scale)
 
@@ -229,16 +241,15 @@ class CaptionDisplay:
         self._clear_preview()
         if self.preview is not None and self.preview[0] == caption_id:
             self.preview = None
-        if self.terminal and self.has_translation:
-            # 分隔句子，不分隔同一句的折行；預留最後一格避免自動換行。
-            columns = shutil.get_terminal_size((80, 24)).columns
-            print("\r\033[2K\033[2;90m" + "─" * max(0, columns - 1) + "\033[0m", flush=True)
         self._last_id = max(self._last_id, caption_id)
-        # 顯示中文時編號已在中文行；譯文只保留同寬空白欄。
-        gutter = self._gutter(None if self.show_zh else caption_id)
+        if not self.show_zh:
+            self._separator()
+        # 雙語模式中，緊接自己中文行的譯文只留空白欄；較晚抵達的譯文標出自己的編號。
+        adjacent = self.show_zh and self._last_caption == caption_id
+        gutter = self._gutter(None if adjacent else caption_id)
         self._received.pop(caption_id, None)
         print_caption(text, "\033[1m", self.en_scale, gutter=gutter)
-        self.has_translation = True
+        self._last_caption = caption_id
         # 較早一句翻譯完成時，保留較新一句的中文辨識進度。
         self._draw_preview()
 
