@@ -223,10 +223,6 @@ The primary Gemini route has been exercised with the 38.7-second synthetic sampl
 
 The following are not promises: microphone quality in every environment, exact semantic translation quality, speaker identity, word-level timing, or offline privacy for the Gemini route.
 
-## Refactoring roadmap
-
-See [`docs/REFACTORING.md`](docs/REFACTORING.md) for staged changes. Stages 1–5 are implemented; the roadmap records what remains and what is deliberately out of scope.
-
 ## AI-assisted maintenance
 
 See [`AGENTS.md`](AGENTS.md). It is the source of truth for agent setup, architecture boundaries, verification commands, and change discipline.
