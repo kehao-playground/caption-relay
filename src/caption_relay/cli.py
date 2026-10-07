@@ -5,10 +5,10 @@ import sys
 
 from google import genai
 
-from . import gemini
 from .audio import Microphone, WavFile
 from .config import PROJECT_ROOT, parse_args
-from .display import CaptionDisplay
+from .providers import gemini_live as gemini
+from .renderers.terminal import CaptionDisplay
 
 LOGO = r"""
   ____            _   _               ____      _

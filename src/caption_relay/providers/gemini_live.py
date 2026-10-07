@@ -6,7 +6,7 @@ import threading
 
 from google.genai import types
 
-from .audio import MIME_TYPE, SilenceDetector
+from ..audio import MIME_TYPE, SilenceDetector
 
 DEFAULT_LIVE_MODEL = "gemini-3.5-transcribe-live"
 DEFAULT_TRANSLATION_MODEL = "gemini-flash-lite-latest"

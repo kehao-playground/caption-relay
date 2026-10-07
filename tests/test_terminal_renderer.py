@@ -7,7 +7,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from caption_relay.display import CaptionDisplay, print_caption
+from caption_relay.renderers.terminal import CaptionDisplay, print_caption
 
 
 KITTY_PARSE = """
