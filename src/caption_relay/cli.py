@@ -7,7 +7,10 @@ from google import genai
 
 from .audio import Microphone, WavFile
 from .config import PROJECT_ROOT, parse_args
-from .providers import gemini_live as gemini
+from .coordinator import CaptionCoordinator
+from .events import SessionStatus
+from .providers.gemini_live import GeminiLiveTranscriber
+from .providers.gemini_text import GeminiTranslator
 from .renderers.terminal import CaptionDisplay
 
 LOGO = r"""
@@ -47,18 +50,29 @@ def open_source(config):
         sys.exit(f"Audio input error: {e}")
 
 
+def describe(config):
+    mode = ("Chinese interim + finalized translation" if config.show_zh
+            else "Chinese preview -> English replacement")
+    return (f"[Captions] {mode} | source={config.source_language} "
+            f"| destination={config.destination_language}")
+
+
 async def main(argv=None):
     config = parse_args(argv)
     client = genai.Client(api_key=load_key())
     source = open_source(config)
     print_logo()
-    print(f"[Connecting] {gemini.live_model()}", flush=True)
     display = CaptionDisplay(config.zh_scale, config.en_scale, config.show_zh)
+    coordinator = CaptionCoordinator(GeminiTranslator(client), display.handle, config.destination_language)
+    transcriber = GeminiLiveTranscriber(client, config.language_codes, vocabulary())
+    display.handle(SessionStatus(describe(config)))
     try:
-        await gemini.run_session(client, config, source, display, vocabulary())
+        await transcriber.run(source, coordinator.handle)
+        await coordinator.drain()
     except TimeoutError:
         sys.exit("Timed out waiting for the final transcription")
     finally:
+        await coordinator.aclose()
         display.close()
 
 

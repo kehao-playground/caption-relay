@@ -5,6 +5,7 @@ import shutil
 import sys
 import unicodedata
 
+from ..events import FinalText, InterimText, SessionStatus, TranslationFailed, TranslationReady
 
 SCALED_LAYOUT = {
     0.5: (1, 1, 2),
@@ -142,24 +143,38 @@ class CaptionDisplay:
         self.preview = (caption_id, text, style, scale)
         self._draw_preview()
 
-    def interim(self, text):
+    def handle(self, event):
+        """Render one caption event (see caption_relay.events)."""
+        match event:
+            case InterimText(text):
+                self._interim(text)
+            case FinalText(caption_id, text, _):
+                self._final(caption_id, text)
+            case TranslationReady(caption_id, text):
+                self._translated(caption_id, text)
+            case TranslationFailed(_, error):
+                self._failed(error)
+            case SessionStatus(message):
+                self._status(message)
+            case _:
+                raise TypeError(f"Unsupported caption event: {event!r}")
+
+    def _interim(self, text):
         if self.terminal:
             scale = 1.0 if self.show_zh else self.zh_scale
             self._set_preview(None, f"… {text[-60:]}", "\033[2m", scale)
 
-    def final(self, text):
-        caption_id = object()
+    def _final(self, caption_id, text):
         if self.show_zh:
             self._clear_preview()
             self.preview = None
             print_caption(f"ZH  {text}", "\033[36m", self.zh_scale)
         elif self.terminal:
             self._set_preview(caption_id, f"ZH  {text}", "\033[36m", self.zh_scale)
-        return caption_id
 
-    def translated(self, caption_id, text):
+    def _translated(self, caption_id, text):
         self._clear_preview()
-        if self.preview is not None and self.preview[0] is caption_id:
+        if self.preview is not None and self.preview[0] == caption_id:
             self.preview = None
         if self.terminal and self.has_translation:
             # 分隔句子，不分隔同一句的折行；預留最後一格避免自動換行。
@@ -170,9 +185,14 @@ class CaptionDisplay:
         # 較早一句翻譯完成時，保留較新一句的中文辨識進度。
         self._draw_preview()
 
-    def failed(self, error):
+    def _failed(self, error):
         self._clear_preview()
         print(f"  [Translation failed: {error}]", flush=True)
+        self._draw_preview()
+
+    def _status(self, message):
+        self._clear_preview()
+        print(message, flush=True)
         self._draw_preview()
 
     def close(self):
