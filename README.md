@@ -6,6 +6,26 @@ Caption Relay streams microphone audio to a transcription backend, turns finaliz
 
 Caption Relay is the public project name and the checkout directory is `caption-relay`.
 
+## Screenshots
+
+Traditional Chinese (Taiwan) speech captioned into English. Both captures are unedited Gemini output in Kitty for the synthetic sample audio (see [Sample audio source](#sample-audio-source)), so they include real recognition mistakes (for example 時機 for 實際).
+
+Bilingual history with caption numbers and receive times. Set `show_zh = true` under `[display]` in `captions.toml` (it has no CLI flag), then run:
+
+```bash
+./start.sh --source-language zh-TW --line-numbers --timestamps --file fixtures/test_zh_paused16k.wav
+```
+
+![Traditional Chinese source lines paired with English translations, each numbered with its receive time](docs/images/bilingual.png)
+
+Default replacement mode: the newest Traditional Chinese line stays as a preview until its English translation replaces it.
+
+```bash
+./start.sh --source-language zh-TW --file fixtures/test_zh_paused16k.wav
+```
+
+![English caption history with a Traditional Chinese preview line waiting for translation](docs/images/replacement.png)
+
 ## Features
 
 - Gemini Live low-latency transcription with interim and finalized text.
@@ -45,7 +65,23 @@ Run the deterministic fixture instead of a microphone:
 ./start.sh --file fixtures/test_zh_paused16k.wav
 ```
 
-The fixture must be 16 kHz, mono, 16-bit PCM WAV. Audio files are not committed; `scripts/make_paused.py` regenerates the paused fixture from `fixtures/test_zh.txt` with Piper TTS (`uv sync --extra fixtures`, model in `models/`), and the 16 kHz copy can be produced with `ffmpeg -i fixtures/test_zh_paused.wav -ar 16000 -ac 1 fixtures/test_zh_paused16k.wav`.
+The fixture must be 16 kHz, mono, 16-bit PCM WAV.
+
+### Sample audio source
+
+The sample audio is synthetic speech, not a recording of a person.
+
+- **Text:** `fixtures/test_zh.txt`, a six-sentence Traditional Chinese presentation script in this repository.
+- **Voice:** [Piper](https://github.com/rhasspy/piper) TTS with `zh_CN-huayan-medium` from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN/huayan/medium). According to its model card, the voice was trained on the [HuaYan_TTS](https://github.com/PlayVoice/HuaYan_TTS) dataset (finetuned from Piper's English `lessac` voice), and its license is listed as **Unknown**. It is a Mainland Mandarin voice reading Traditional Chinese text.
+- **Files** (local only, ignored by git and not redistributed with this project):
+
+  | File | Format | Length | Content |
+  |---|---|---|---|
+  | `fixtures/test_zh_paused.wav` | 22.05 kHz mono 16-bit | 38.7 s | One sentence per synthesis, joined with 0.6 s of silence by `scripts/make_paused.py` |
+  | `fixtures/test_zh_paused16k.wav` | 16 kHz mono 16-bit | 38.7 s | 16 kHz copy used by Caption Relay and the screenshots |
+  | `fixtures/test_zh.wav`, `fixtures/test_zh16k.wav` | 22.05 kHz / 16 kHz | 36.1 s | The same script without inserted pauses; used by some `routes/` probes. No generator is committed for it |
+
+To regenerate the paused fixture, download the Piper voice into `models/`, run `uv sync --extra fixtures`, then `uv run python scripts/make_paused.py`, and resample it, for example with `ffmpeg -i fixtures/test_zh_paused.wav -ar 16000 -ac 1 fixtures/test_zh_paused16k.wav`. Because the voice license is unknown, do not commit or publish the generated audio; the README screenshots show only the terminal text.
 
 `start.sh` resolves the Python project from its own location, so it can be launched from another working directory. It runs the `caption-relay` console script, which is equivalent to `uv run caption-relay` or `uv run python -m caption_relay` inside the checkout.
 
@@ -73,7 +109,7 @@ input_device = "pipewire"
 
 ### Language
 
-- `languages.source`: `auto` or a BCP-47 code such as `zh-TW`.
+- `languages.source`: `auto` or a BCP-47 code such as `zh-TW`. With the sample audio, `auto` produced Simplified Chinese transcripts and `zh-TW` produced Traditional Chinese; set `zh-TW` if you want Traditional Chinese previews.
 - `languages.destination`: a language code or name used in the translation request; default `en`.
 - One-run overrides: `--source-language`, `--destination-language`.
 
@@ -183,7 +219,7 @@ Do not commit API keys, recordings, model files, virtual environments, generated
 
 ## Verification status
 
-The primary Gemini route has been exercised with the bundled 38.7-second fixture and produced six finalized English captions. The microphone path has been opened successfully through the configured PipeWire device. The test suite has 57 tests. Configuration parsing, WAV validation, microphone selection (with a fake PyAudio), audio events, the caption coordinator (with a fake translator: ID stability, out-of-order completion, failures, bounded concurrency, cancellation), and the Gemini translator request shape have unit tests. The terminal renderer has 28 Kitty-backed regression tests covering replacement ordering, separators, wrapping, narrow splits, mixed-width text, redirected output, failure retention, and the metadata column. The metadata column has also been inspected in a real Kitty window with the live fixture.
+The primary Gemini route has been exercised with the 38.7-second synthetic sample audio and produced six finalized English captions. The microphone path has been opened successfully through the configured PipeWire device. The test suite has 59 tests. Configuration parsing, WAV validation, microphone selection (with a fake PyAudio), audio events, the caption coordinator (with a fake translator: ID stability, out-of-order completion, failures, bounded concurrency, cancellation), and the Gemini translator request shape have unit tests. The terminal renderer has 30 Kitty-backed regression tests covering replacement ordering, separators (including bilingual grouping), wrapping, narrow splits, mixed-width text, redirected output, failure retention, and the metadata column. The metadata column has also been inspected in a real Kitty window with the sample audio.
 
 The following are not promises: microphone quality in every environment, exact semantic translation quality, speaker identity, word-level timing, or offline privacy for the Gemini route.
 

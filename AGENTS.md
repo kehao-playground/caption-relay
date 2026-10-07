@@ -92,7 +92,7 @@ The offline and comparison scripts under `routes/` are intentionally separate ro
 - Do not add retries, telemetry, persistence, or abstractions unless the task requires them.
 - Keep the terminal renderer backend-agnostic. Kitty-specific escape sequences belong behind renderer helpers.
 - Do not add a second configuration format.
-- Do not commit generated audio, model files, screenshots, smoke scripts, logs, or secrets.
+- Do not commit generated audio, model files, ad-hoc screenshots, smoke scripts, logs, or secrets. The only committed images are the README screenshots in `docs/images/`; regenerate them with the procedure below instead of adding new ones casually.
 - Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`; optional scope such as `feat(display):`).
 
 ## Verification matrix
@@ -113,6 +113,17 @@ PY
 ```
 
 For changes to the live route, run the fixture only when credentials are available and report whether the observed output completed normally. For UI changes, launch a real Kitty preview and inspect it; parser tests alone are not visual proof.
+
+## README screenshots
+
+`docs/images/bilingual.png` and `docs/images/replacement.png` use Traditional Chinese input (`--source-language zh-TW`) and the fixture. To regenerate them, run the README commands in a Kitty window with `-o background_opacity=1 -o background_image=none`, hide the cursor (`printf '\033[?25l'` before `./start.sh`), capture the window, then trim and compress:
+
+```bash
+magick shot.png -fuzz 3% -trim +repage -bordercolor "srgb(40,42,54)" -border 36 \
+  -strip -dither None -colors 128 -define png:compression-level=9 docs/images/<name>.png
+```
+
+Use the terminal background color for the border. For `bilingual.png`, use a temporary config with `show_zh = true`; do not commit it. Capture `replacement.png` mid-run so a Chinese preview is visible. Keep the images unedited apart from cropping.
 
 ## Known limitations
 
