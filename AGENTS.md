@@ -116,7 +116,7 @@ For changes to the live route, run the fixture only when credentials are availab
 
 ## README screenshots
 
-`docs/images/bilingual.png` and `docs/images/replacement.png` use Traditional Chinese input (`--source-language zh-TW`) and the fixture. To regenerate them, run the README commands in a Kitty window with `-o background_opacity=1 -o background_image=none`, hide the cursor (`printf '\033[?25l'` before `./start.sh`), capture the window, then trim and compress:
+`docs/images/bilingual.png` and `docs/images/replacement.png` use the fixture with `--source-language zh-TW` so the transcript is shown in Traditional characters. To regenerate them, run the README commands in a Kitty window with `-o background_opacity=1 -o background_image=none`, hide the cursor (`printf '\033[?25l'` before `./start.sh`), capture the window, then trim and compress:
 
 ```bash
 magick shot.png -fuzz 3% -trim +repage -bordercolor "srgb(40,42,54)" -border 36 \

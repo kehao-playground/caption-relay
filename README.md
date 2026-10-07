@@ -8,7 +8,7 @@ Caption Relay is the public project name and the checkout directory is `caption-
 
 ## Screenshots
 
-Traditional Chinese (Taiwan) speech captioned into English. Both captures are unedited Gemini output in Kitty for the synthetic sample audio (see [Sample audio source](#sample-audio-source)), so they include real recognition mistakes (for example 時機 for 實際).
+Chinese speech captioned into English. The commands pass `--source-language zh-TW` only so the transcript is shown in Traditional characters. Both captures are unedited Gemini output in Kitty for the synthetic sample audio (see [Sample audio source](#sample-audio-source)), so they include real recognition mistakes (for example 時機 for 實際).
 
 Bilingual history with caption numbers and receive times. Set `show_zh = true` under `[display]` in `captions.toml` (it has no CLI flag), then run:
 
@@ -16,15 +16,15 @@ Bilingual history with caption numbers and receive times. Set `show_zh = true` u
 ./start.sh --source-language zh-TW --line-numbers --timestamps --file fixtures/test_zh_paused16k.wav
 ```
 
-![Traditional Chinese source lines paired with English translations, each numbered with its receive time](docs/images/bilingual.png)
+![Chinese source lines paired with English translations, each numbered with its receive time](docs/images/bilingual.png)
 
-Default replacement mode: the newest Traditional Chinese line stays as a preview until its English translation replaces it.
+Default replacement mode: the newest Chinese line stays as a preview until its English translation replaces it.
 
 ```bash
 ./start.sh --source-language zh-TW --file fixtures/test_zh_paused16k.wav
 ```
 
-![English caption history with a Traditional Chinese preview line waiting for translation](docs/images/replacement.png)
+![English caption history with a Chinese preview line waiting for translation](docs/images/replacement.png)
 
 ## Features
 
@@ -71,8 +71,8 @@ The fixture must be 16 kHz, mono, 16-bit PCM WAV.
 
 The sample audio is synthetic speech, not a recording of a person.
 
-- **Text:** `fixtures/test_zh.txt`, a six-sentence Traditional Chinese presentation script in this repository.
-- **Voice:** [Piper](https://github.com/rhasspy/piper) TTS with `zh_CN-huayan-medium` from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN/huayan/medium). According to its model card, the voice was trained on the [HuaYan_TTS](https://github.com/PlayVoice/HuaYan_TTS) dataset (finetuned from Piper's English `lessac` voice), and its license is listed as **Unknown**. It is a Mainland Mandarin voice reading Traditional Chinese text.
+- **Text:** `fixtures/test_zh.txt`, a six-sentence Chinese presentation script (written in Traditional characters) in this repository.
+- **Voice:** [Piper](https://github.com/rhasspy/piper) TTS with `zh_CN-huayan-medium` from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN/huayan/medium). According to its model card, the voice was trained on the [HuaYan_TTS](https://github.com/PlayVoice/HuaYan_TTS) dataset (finetuned from Piper's English `lessac` voice), and its license is listed as **Unknown**.
 - **Files** (local only, ignored by git and not redistributed with this project):
 
   | File | Format | Length | Content |
